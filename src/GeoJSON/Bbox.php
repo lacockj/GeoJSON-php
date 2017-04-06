@@ -6,7 +6,7 @@ class Bbox implements \JsonSerializable {
   protected $min = array();
   protected $max = array();
 
-  public function __construct( $box ) {
+  public function __construct( $box=null ) {
     if ( is_array( $box ) ) {
       if ( count($box) === 4 ) {
         $this->min[0] = $box[0];

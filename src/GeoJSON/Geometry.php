@@ -2,103 +2,110 @@
 
 namespace GeoJSON;
 
-class Geometry implements \JsonSerializable {
+class Geometry implements \ArrayAccess, \JsonSerializable {
+
+  private $supportedGeometryTypes = array("Point", "LineString", "Polygon", "MultiPolygon");
+  # Eventually "Point", "MultiPoint", "LineString", "MultiLineString", "Polygon", "MultiPolygon", "GeometryCollection"
+
   protected $type;
   protected $coordinates;
   protected $bbox;
 
-  public function __construct($type, $coordinates) {
+  public function __construct( $input ) {
 
-    # Well-Known Text #
-    if ( $type=="WKT" ) {
-      $geometry = $this->parseWkt( $coordinates );
-      if ( $geometry === null ) {
-        throw new \Exception("Unsupported WKT format.");
-      }
-      $this->type = $geometry['type'];
-      $this->coordinates = $geometry['coordinates'];
+    # Handle Well-Known Text (WKT) input string. #
+    if ( is_string( $input ) ) {
+      $input = $this->parseWKT( $input );
     }
 
-    # Point #
-    elseif ($type=="Point") {
-      $this->type = "Point";
-      if (is_array($coordinates)) {
-          if (count($coordinates) == 3) {
-            $x = floatval($coordinates[0]);
-            $y = floatval($coordinates[1]);
-            $z = floatval($coordinates[2]);
-            $this->coordinates = array($x,$y,$z);
-          } elseif (count($coordinates) == 2) {
-            $x = floatval($coordinates[0]);
-            $y = floatval($coordinates[1]);
-            $this->coordinates = array($x,$y);
-          } else {
-            throw new \Exception('Coordinates must be a two-or-three-element array in X,Y,Z* order. *(Z ordinate is optional.)');
-          }
-      } else {
-        throw new \Exception('Coordinates must be a two-or-three-element array in X,Y,Z* order. *(Z ordinate is optional.)');
-      }
+    # Validate input format. #
+    if ( !( is_array( $input ) && array_key_exists( 'type', $input ) && array_key_exists( 'coordinates', $input ) ) ) {
+      throw new \Exception( "Invalid geometry format: Input must be an associative array including 'type' and 'coordinates' keys." );
     }
 
-    # LineString #
-    elseif ($type=="LineString") {
-      $this->type = "LineString";
-      if (is_array($coordinates[0])) {
-        $this->coordinates = $coordinates;
-      } else {
-        throw new \Exception('Coordinates must be a two-dimentional array of Point coordinates.');
-      }
+    # Validate supported geometry type. #
+    if ( ! in_array( $input['type'], $this->supportedGeometryTypes ) ) {
+      throw new \Exception( "Unsupported geometry type: " . $input['type'] . "; Must be one of the following: " . implode( ", ", $this->supportedGeometryTypes ) );
     }
 
-    # Polygon #
-    elseif ($type=="Polygon") {
-      $this->type = "Polygon";
-      if (is_scalar($coordinates[0][0])) {
-        $this->coordinates = array($coordinates);
-      } elseif (is_array($coordinates[0][0])) {
-        $this->coordinates = $coordinates;
-      } else {
-        throw new \Exception('Coordinates must be a three-dimentional array of LineStrings coordinate arrays. The first is the outer LineString; the second is the inner, cut-out LineString.');
-      }
-      # Ensure polygon closure.
-      foreach( $this->coordinates as $linestring ) {
-        $last = count($linestring) - 1;
-        if ( $linestring[0][0] !== $linestring[$last][0] || $linestring[0][1] !== $linestring[$last][1] ) {
-          $linestring[] = $linestring[0];
+    $this->type = $input['type'];
+
+    switch( $input['type'] ) {
+
+      case "Point":
+        if (is_array($input['coordinates'])) {
+            if (count($input['coordinates']) == 3) {
+              $x = floatval($input['coordinates'][0]);
+              $y = floatval($input['coordinates'][1]);
+              $z = floatval($input['coordinates'][2]);
+              $this->coordinates = array($x,$y,$z);
+            } elseif (count($input['coordinates']) == 2) {
+              $x = floatval($input['coordinates'][0]);
+              $y = floatval($input['coordinates'][1]);
+              $this->coordinates = array($x,$y);
+            } else {
+              throw new \Exception('Coordinates must be a two-or-three-element array in X,Y,Z* order. *(Z ordinate is optional.)');
+            }
+        } else {
+          throw new \Exception('Coordinates must be a two-or-three-element array in X,Y,Z* order. *(Z ordinate is optional.)');
         }
-      }
-    }
+        break;
 
-    # MultiPolygon #
-    elseif ($type=="MultiPolygon") {
-      $this->type = "MultiPolygon";
-      # Parts: entire geometry,            each polygon,          polygon's outline and cutout,    and the point coordinate set
-      if ( is_array($coordinates) && is_array($coordinates[0]) && is_array($coordinates[0][0]) && is_array($coordinates[0][0][0] ) ) {
-        $this->coordinates = $coordinates;
-      } else {
-        throw new \Exception('MultiPolygon coordinates must be a four-dimentional array.');
-      }
-      # Ensure polygon closure.
-      foreach ( $this->coordinates as $poly ) {
-        foreach( $poly as $linestring ) {
+      case "LineString":
+        if (is_array($input['coordinates'][0])) {
+          $this->coordinates = $input['coordinates'];
+        } else {
+          throw new \Exception('Coordinates must be a two-dimentional array of Point coordinates.');
+        }
+        break;
+
+      case "Polygon":
+        if (is_scalar($input['coordinates'][0][0])) {
+          $this->coordinates = array($input['coordinates']);
+        } elseif (is_array($input['coordinates'][0][0])) {
+          $this->coordinates = $input['coordinates'];
+        } else {
+          throw new \Exception('Coordinates must be a three-dimentional array of LineStrings coordinate arrays. The first is the outer LineString; the second is the inner, cut-out LineString.');
+        }
+        # Ensure polygon closure.
+        foreach( $this->coordinates as &$linestring ) {
           $last = count($linestring) - 1;
           if ( $linestring[0][0] !== $linestring[$last][0] || $linestring[0][1] !== $linestring[$last][1] ) {
             $linestring[] = $linestring[0];
           }
         }
-      }
-    }
+        break;
 
-    # Unsupported Geometry Type #
-    else {
-      throw new \Exception('Unsupported geometry type. Supported geometry types are "Point", "LineString", and "Polygon".');
-    }
+      case "MultiPolygon":
+        # Parts: entire geometry,            each polygon,          polygon's outline and cutout,    and the point coordinate set
+        if ( is_array($input['coordinates']) && is_array($input['coordinates'][0]) && is_array($input['coordinates'][0][0]) && is_array($input['coordinates'][0][0][0] ) ) {
+          $this->coordinates = $input['coordinates'];
+        } else {
+          throw new \Exception('MultiPolygon coordinates must be a four-dimentional array.');
+        }
+        # Ensure polygon closure.
+        foreach ( $this->coordinates as &$poly ) {
+          foreach( $poly as &$linestring ) {
+            $last = count($linestring) - 1;
+            if ( $linestring[0][0] !== $linestring[$last][0] || $linestring[0][1] !== $linestring[$last][1] ) {
+              $linestring[] = $linestring[0];
+            }
+          }
+        }
+        break;
 
-  }
+    } # End switch( $input['type'] ) #
+  } # End __construct #
 
   public function __get ( $name ) {
 
     switch ( $name ) {
+
+      case "type":
+        return $this->type;
+
+      case "coordinates":
+        return $this->coordinates;
 
       case "bbox":
         return ( $this->bbox !== null ) ? $this->bbox : $this->bbox();
@@ -107,7 +114,33 @@ class Geometry implements \JsonSerializable {
 
   }
 
+  # ArrayAccess Implementaion #
+
+  public function offsetExists( $offset ) {
+    return (bool)( in_array( $offset, array( "type", "geometry", "properties", "bbox" ) ) );
+  }
+
+  public function offsetGet($offset) {
+    return $this->{$offset};
+  }
+
+  public function offsetSet( $offset, $value ) {
+    # Direct setting not supported. #
+  }
+
+  public function offsetUnset( $offset ) {
+    $this->{$offset} = null;
+  }
+
+  # JsonSerializable Implementation #
+
   public function jsonSerialize() {
+    return $this->toArray();
+  }
+
+  # Class Methods #
+
+  public function toArray() {
     return array(
       'type' => $this->type,
       'coordinates' => $this->coordinates
