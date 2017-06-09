@@ -77,18 +77,11 @@ class FeatureCollection implements \ArrayAccess, \JsonSerializable {
   # Class Methods #
 
   public function toArray() {
-    if (count($this->properties)) {
-      return array(
-        'type' => $this->type,
-        'features' => array_map( function($f){return $f->toArray();}, $this->features ),
-        'properties' => $this->properties
-      );
-    } else {
-      return array(
-        'type' => $this->type,
-        'features' => array_map( function($f){return $f->toArray();}, $this->features ),
-      );
-    }
+    $a = array( 'type' => $this->type );
+    if (count($this->properties)) $a['properties'] = $this->properties;
+    if (count($this->features)) $a['bbox'] = $this->bbox();
+    $a['features'] = array_map( function($f){return $f->toArray();}, $this->features );
+    return $a;
   }
 
   public function add($feature) {

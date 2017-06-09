@@ -320,6 +320,38 @@ class Geometry implements \ArrayAccess, \JsonSerializable {
     return $geometry;
   }
 
+  public function within ( $poly ) {
+    if ( ! ( $this->type === "Point" && ( $poly['type'] === "Polygon" || $poly['type'] === "MultiPolygon" ) ) )
+      throw new \Exception("Method 'within' expects to be called from a 'Point' geometry on a 'Polygon' or 'MultiPolygon'");
+    if ( $poly['type'] === "MultiPolygon" ) {
+      foreach ( $poly['coordinates'] as $part ) {
+        if ( self::point_in_polygon( $this->coordinates, $part ) )
+          return true;
+      }
+    } else {
+      if ( self::point_in_polygon( $this->coordinates, $poly['coordinates'] ) )
+        return true;
+    }
+    return false;
+  }
+
+  public static function point_in_polygon ( $pt, $poly ) {
+    $isIn = false;
+    for ( $r=0, $ringCount=count($poly); $r < $ringCount; $r++ ) {
+      $n = count( $poly[$r] );
+      for ($i = 0, $j = $n-1 ; $i < $n; $j = $i++) {
+        if (
+          ( ( $poly[$r][$i][1] > $pt[1] ) != ( $poly[$r][$j][1] > $pt[1] ) )
+          &&
+          ( $pt[0] < ( ( $poly[$r][$j][0] - $poly[$r][$i][0] ) * ( $pt[1] - $poly[$r][$i][1] ) / ( $poly[$r][$j][1] - $poly[$r][$i][1] ) + $poly[$r][$i][0] ) )
+        ) {
+          $isIn = !$isIn;
+        }
+      }
+    }
+    return $isIn;
+  }
+
 }
 
 ?>
