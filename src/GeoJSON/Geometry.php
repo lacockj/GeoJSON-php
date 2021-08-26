@@ -234,7 +234,7 @@ class Geometry implements \ArrayAccess, \JsonSerializable {
         $s = $this->bbox[1];
         $e = $this->bbox[2];
         $n = $this->bbox[3];
-      } elseif ( count( $this->bbox === 6 ) ) {
+      } elseif ( count( $this->bbox ) === 6 ) {
         $w = $this->bbox[0];
         $s = $this->bbox[1];
         $e = $this->bbox[3];
