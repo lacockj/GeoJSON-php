@@ -27,7 +27,7 @@ class FeatureCollection implements \ArrayAccess, \JsonSerializable {
 
     # Feature Properties #
     if ( array_key_exists( 'properties', $input ) && is_array( $input['properties'] ) ) {
-      $this->properties = $properties;
+      $this->properties = $input['properties'];
     }
 
   }
